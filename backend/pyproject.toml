@@ -1,0 +1,35 @@
+[project]
+name = "ai-governance-runtime-action-governor"
+version = "0.1.0"
+description = "Runtime Action Governor MVP - deterministic governance enforcement at the agent tool execution boundary"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "langchain-core>=0.3.28",
+    "langchain-openai>=0.3.0",
+    "langgraph>=0.2.60",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "anyio>=4.6",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

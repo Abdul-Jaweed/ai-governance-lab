@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: governance-postgres
+    environment:
+      POSTGRES_USER: governance
+      POSTGRES_PASSWORD: governance
+      POSTGRES_DB: governance
+    ports:
+      - "5433:5432"
+    volumes:
+      - governance_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U governance -d governance"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  governance_pgdata:
