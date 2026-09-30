@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
 
 from app.governance.errors import (
     GovernanceApprovalRequired,
