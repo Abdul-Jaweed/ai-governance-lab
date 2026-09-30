@@ -10,9 +10,8 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select, text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import GovernanceEventRow, GovernanceRunRow
 from app.db.repositories import PostgresRecorder
@@ -25,57 +24,23 @@ from app.governance.models import (
 )
 from app.governance.policy import GovernancePolicy
 
-DATABASE_URL = "postgresql+asyncpg://governance:governance@localhost:5433/governance"
-
 
 @pytest_asyncio.fixture
-async def engine():
-    """Function-scoped engine: each test gets a fresh loop and connections.
-
-    ``pool_pre_ping`` discards stale/broken connections, which matters
-    because one test deliberately aborts a transaction to prove the foreign
-    key rejects an event with no run.
-    """
-    try:
-        eng = create_async_engine(DATABASE_URL, pool_pre_ping=True)
-        async with eng.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except Exception as exc:  # pragma: no cover - environment dependent
-        pytest.skip(f"Postgres not available at {DATABASE_URL}: {exc}")
-    yield eng
-    await eng.dispose()
-
-
-@pytest_asyncio.fixture
-async def make_recorder(engine):
-    """Return a factory for recorders, all closed again at test teardown.
-
-    Wiping the tables *before* each test gives isolation without needing
-    per-test transactions, which matters because the FK-violation test
-    deliberately leaves a transaction in an error state.
-    """
-    factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+async def make_recorder(pg_factory, clean_db):
+    """Return a recorder factory; every recorder is closed at teardown."""
     recorders: list[PostgresRecorder] = []
 
-    async def wipe() -> None:
-        async with factory() as session:
-            await session.execute(delete(GovernanceEventRow))
-            await session.execute(delete(GovernanceRunRow))
-            await session.commit()
-
     async def build() -> PostgresRecorder:
-        recorder = PostgresRecorder(factory)
+        recorder = PostgresRecorder(pg_factory)
         recorders.append(recorder)
         return recorder
 
-    await wipe()
     yield build
     for recorder in recorders:
         try:
             await recorder.aclose()
         except Exception:
             pass  # a poisoned session cannot always be closed cleanly
-    await wipe()
 
 
 def make_context(run_id: str) -> GovernanceContext:
@@ -115,7 +80,7 @@ async def test_run_is_persisted(make_recorder):
     recorder = await make_recorder()
     await add_run(recorder, run_id)
 
-    async with recorder._session_factory() as session:
+    async with recorder.read_session() as session:
         row = await session.get(GovernanceRunRow, run_id)
         assert row is not None
         assert row.agent_id == "customer-support-agent"
@@ -140,7 +105,7 @@ async def test_event_is_persisted_with_sanitized_arguments(make_recorder):
     )
     await recorder.flush()
 
-    async with recorder._session_factory() as session:
+    async with recorder.read_session() as session:
         rows = (
             (
                 await session.execute(
@@ -174,7 +139,7 @@ async def test_denial_is_persisted(make_recorder):
     await recorder.flush()
 
     assert decision.decision == "DENY"
-    async with recorder._session_factory() as session:
+    async with recorder.read_session() as session:
         row = (
             (
                 await session.execute(
@@ -222,7 +187,7 @@ async def test_run_can_be_finalized(make_recorder):
         ended_at=datetime.now(timezone.utc),
     )
 
-    async with recorder._session_factory() as session:
+    async with recorder.read_session() as session:
         row = await session.get(GovernanceRunRow, run_id)
         assert row.status == "completed"
         assert row.ended_at is not None

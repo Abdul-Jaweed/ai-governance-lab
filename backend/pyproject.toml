@@ -29,6 +29,10 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 asyncio_mode = "auto"
+# Async tests share one event loop per module so a module-scoped database
+# engine (and its pooled asyncpg connections) stay bound to a live loop.
+asyncio_default_fixture_loop_scope = "module"
+asyncio_default_test_loop_scope = "module"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore::DeprecationWarning",

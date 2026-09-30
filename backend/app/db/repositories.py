@@ -100,6 +100,11 @@ class PostgresRecorder:
             await self._session.close()
             self._session = None
 
+    def read_session(self):
+        """A short-lived session for ad-hoc reads (inspection, tests)."""
+
+        return self._session_factory()
+
     async def finalize_run(
         self, *, run_id: str, status: str, ended_at: datetime | None = None
     ) -> None:
@@ -141,6 +146,15 @@ class PostgresRecorder:
                 .offset(offset)
             )
             return list(result.scalars().all())
+
+    async def count_runs(self) -> int:
+        """Total number of runs, independent of pagination."""
+
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(func.count()).select_from(GovernanceRunRow)
+            )
+            return int(result.scalar_one())
 
     async def summarize_run(self, run_id: str) -> dict[str, int]:
         """Decision counts for a run, used by the evidence record."""
